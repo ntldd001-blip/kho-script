@@ -20,18 +20,19 @@ button.ghost{background:transparent;color:var(--dn);border:1px solid var(--soft)
 button.ok{background:var(--ok);color:#fff}
 #tools{margin-bottom:14px}
 .add{display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap}
-.add input{width:160px}
+.add input{width:190px}
 .add textarea{flex:1;min-width:200px;min-height:44px;height:44px}
 .exp{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--mut)}
 .table{border:2px solid var(--bd);border-radius:16px;overflow:hidden;background:var(--card)}
-.head,.row{display:grid;grid-template-columns:130px 1fr 1fr}
+.head,.row{display:grid;grid-template-columns:190px 1fr 1fr}
 .head{border-bottom:2px solid var(--bd);font-weight:700;text-align:center}
 .head div{padding:10px}
 .head div:not(:last-child),.cell:not(:last-child){border-right:2px solid var(--bd)}
 .row+.row{border-top:1px solid var(--soft)}
 .cell{display:flex;gap:8px;align-items:flex-start;padding:10px;min-width:0}
 .cell textarea{flex:1;min-width:0;height:62px;min-height:44px}
-.gname{font-weight:600;word-break:break-word;width:100%}
+.gname{font-weight:600;word-break:break-word;width:100%;line-height:1.35;padding:6px 2px}
+.cell textarea.gin{height:auto;min-height:38px;font-family:inherit;font-size:15px;font-weight:600;line-height:1.35;resize:none;overflow:hidden;word-break:break-word}
 .btns{display:flex;flex-direction:column;align-items:center;gap:8px}
 .dot{width:30px;height:30px;padding:0;border-radius:50%;background:var(--ok);border:2px solid var(--ok);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff}
 .dot.none{background:transparent;border:2px dashed var(--mut);color:var(--mut)}
@@ -48,7 +49,7 @@ button.ok{background:var(--ok);color:#fff}
 .box{background:var(--card);border-radius:12px;padding:12px;max-width:min(900px,100%);max-height:100%;display:flex;flex-direction:column;gap:10px;overflow:auto}
 .box img{max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px;display:block;margin:0 auto}
 .box .bar{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
-@media (max-width:760px){
+@media (max-width:860px){
  .head{display:none}
  .row{grid-template-columns:1fr}
  .head div:not(:last-child),.cell:not(:last-child){border-right:0}
@@ -235,6 +236,10 @@ button.ok{background:var(--ok);color:#fff}
     tools.appendChild(det);
   }
 
+  function fitG(t){ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; }
+  function fitAll(){ listEl.querySelectorAll('textarea.gin').forEach(fitG); }
+  window.addEventListener('resize',fitAll);
+
   function render(){
     listEl.textContent='';
     var items=state.items||[];
@@ -246,8 +251,10 @@ button.ok{background:var(--ok);color:#fff}
       // cột Game
       var gEl;
       if(admin){
-        gEl=el('input',{placeholder:'Tên game',maxlength:'120'}); gEl.value=it.game||'';
-        gEl.addEventListener('change',function(){ it.game=gEl.value.trim(); save(); });
+        gEl=el('textarea',{class:'gin',rows:'1',placeholder:'Tên game',maxlength:'120'}); gEl.value=it.game||'';
+        gEl.addEventListener('input',function(){ fitG(gEl); });
+        gEl.addEventListener('change',function(){ it.game=gEl.value.replace(/\s*\n\s*/g,' ').trim(); gEl.value=it.game; fitG(gEl); save(); });
+        gEl.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); gEl.blur(); } });
       } else gEl=el('div',{class:'gname',text:it.game||'—'});
       var cg=el('div',{class:'cell'},[el('div',{class:'lab',text:'Game'}),gEl]);
 
@@ -291,6 +298,7 @@ button.ok{background:var(--ok);color:#fff}
 
       listEl.appendChild(el('div',{class:'row'},[cg,cs,ck]));
     });
+    fitAll();
   }
 
   sub.textContent=admin?'Chế độ chủ trang: thêm, sửa, xóa. Dữ liệu lưu trong trình duyệt này, sửa xong nhớ bấm Đăng lên GitHub để bạn bè thấy.':'Bấm Copy để chép script hoặc key. Bấm nút xanh để xem giao diện.';
