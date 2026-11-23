@@ -40,6 +40,7 @@ button.ok{background:var(--ok);color:#fff}
 .keybox input{border:0;background:transparent;border-radius:8px 0 0 8px;outline:0;flex:1;min-width:0}
 .keybox .t{border-left:1px solid var(--soft);padding:4px 8px;font-size:11px;line-height:1.3;color:var(--mut);text-align:center;display:flex;flex-direction:column;justify-content:center;white-space:nowrap}
 .keybox .t b{color:var(--tx);font-weight:600}
+.gh{margin-top:10px;font-size:13px;color:var(--mut)}.gh summary{cursor:pointer}.ghrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:8px}.ghmsg{color:var(--tx)}
 .lab{display:none}
 .empty{color:var(--mut);text-align:center;padding:28px 8px}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
@@ -159,17 +160,51 @@ button.ok{background:var(--ok);color:#fff}
     modal.classList.add('on');
   }
 
-  function exportFile(){
+  function buildHtml(){
     var c=document.documentElement.cloneNode(true);
     ['list','tools','sub','box'].forEach(function(id){ var n=c.querySelector('#'+id); if(n) n.textContent=''; });
     var m=c.querySelector('#modal'); if(m) m.className='';
     var json=JSON.stringify({rev:state.rev||Date.now(),items:state.items}).replace(/</g,'\\u003c');
     c.querySelector('#data').textContent=json;
-    var html='<!DOCTYPE html>\n'+c.outerHTML;
-    var blob=new Blob([html],{type:'text/html'});
+    return '<!DOCTYPE html>\n'+c.outerHTML;
+  }
+  function exportFile(){
+    var blob=new Blob([buildHtml()],{type:'text/html'});
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='index.html';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function(){URL.revokeObjectURL(a.href)},2000);
+  }
+
+  var GH='kho-script-gh';
+  function ghCfg(){
+    var d={owner:'',repo:'',token:''};
+    try{ Object.assign(d,JSON.parse(localStorage.getItem(GH)||'{}')); }catch(e){}
+    if(!d.owner && /github\.io$/.test(location.hostname)){ d.owner=location.hostname.split('.')[0]; d.repo=location.pathname.split('/')[1]||''; }
+    return d;
+  }
+  function toB64(str){
+    var b=new TextEncoder().encode(str), bin='', n=0x8000;
+    for(var i=0;i<b.length;i+=n) bin+=String.fromCharCode.apply(null,b.subarray(i,i+n));
+    return btoa(bin);
+  }
+  async function publish(btn,msgEl){
+    var cfg=ghCfg();
+    if(!cfg.token||!cfg.owner||!cfg.repo){ msgEl.textContent='Chưa có token. Mở mục "Cài đặt đăng tự động" bên dưới để dán token.'; return; }
+    btn.disabled=true; msgEl.textContent='Đang đăng…';
+    try{
+      var api='https://api.github.com/repos/'+cfg.owner+'/'+cfg.repo+'/contents/index.html';
+      var h={Authorization:'Bearer '+cfg.token,Accept:'application/vnd.github+json'};
+      var r=await fetch(api+'?ref=main',{headers:h,cache:'no-store'});
+      var sha=null;
+      if(r.ok){ sha=(await r.json()).sha; }
+      else if(r.status!==404) throw new Error('Không đọc được repository ('+r.status+'). Kiểm tra lại token và tên repository.');
+      var body={message:'Cập nhật từ trang quản trị',content:toB64(buildHtml()),branch:'main'};
+      if(sha) body.sha=sha;
+      var p=await fetch(api,{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},h),body:JSON.stringify(body)});
+      if(!p.ok){ var t={}; try{ t=await p.json(); }catch(e){} throw new Error(t.message||('Lỗi '+p.status)); }
+      msgEl.textContent='✓ Đã đăng. Đợi 1–2 phút, bạn bè tải lại trang là thấy bản mới.';
+    }catch(e){ msgEl.textContent='Lỗi: '+(e.message||e); }
+    btn.disabled=false;
   }
 
   function renderTools(){
@@ -182,9 +217,22 @@ button.ok{background:var(--ok);color:#fff}
       state.items.push({id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),game:g.value.trim(),script:s.value,key:'',keyAt:0});
       g.value=''; s.value=''; save(); render();
     }});
-    var ex=el('button',{text:'⬇ Xuất file index.html',onclick:exportFile});
+    var cfg=ghCfg();
+    var msg=el('span',{class:'ghmsg'});
+    var pub=el('button',{text:'🚀 Đăng lên GitHub',onclick:function(){publish(pub,msg)}});
+    var ex=el('button',{class:'ghost',text:'⬇ Xuất file (dự phòng)',onclick:exportFile});
+    ex.style.color='var(--mut)';
+    var ow=el('input',{placeholder:'Tài khoản GitHub'}); ow.value=cfg.owner||'';
+    var rp=el('input',{placeholder:'Tên repository'}); rp.value=cfg.repo||'';
+    var tk=el('input',{type:'password',placeholder:'Dán token GitHub (chỉ làm một lần)',autocomplete:'off'}); tk.value=cfg.token||'';
+    var sv=el('button',{text:'Lưu cài đặt',onclick:function(){
+      try{ localStorage.setItem(GH,JSON.stringify({owner:ow.value.trim(),repo:rp.value.trim(),token:tk.value.trim()})); msg.textContent='Đã lưu cài đặt.'; }
+      catch(e){ msg.textContent='Không lưu được cài đặt.'; }
+    }});
+    var det=el('details',{class:'gh'},[el('summary',{text:'Cài đặt đăng tự động (token GitHub)'}),el('div',{class:'ghrow'},[ow,rp,tk,sv])]);
     tools.appendChild(el('div',{class:'add'},[g,s,b]));
-    tools.appendChild(el('div',{class:'exp'},[ex,el('span',{text:'Sau khi sửa, bấm Xuất rồi tải file lên GitHub để bạn bè thấy bản mới.'})]));
+    tools.appendChild(el('div',{class:'exp'},[pub,ex,msg]));
+    tools.appendChild(det);
   }
 
   function render(){
@@ -245,7 +293,7 @@ button.ok{background:var(--ok);color:#fff}
     });
   }
 
-  sub.textContent=admin?'Chế độ chủ trang: thêm, sửa, xóa. Dữ liệu lưu trong trình duyệt này, nhớ bấm Xuất file để đăng.':'Bấm Copy để chép script hoặc key. Bấm nút xanh để xem giao diện.';
+  sub.textContent=admin?'Chế độ chủ trang: thêm, sửa, xóa. Dữ liệu lưu trong trình duyệt này, sửa xong nhớ bấm Đăng lên GitHub để bạn bè thấy.':'Bấm Copy để chép script hoặc key. Bấm nút xanh để xem giao diện.';
   renderTools();
   render();
 })();
